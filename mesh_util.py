@@ -65,8 +65,8 @@ def mesh_to_voxelized_run2D( mesh, max_dim = 100, transformation = np.eye(4) ):
 
 def transform_converted_matlab_meshes(mesh_path):
     mesh = trimesh.load_mesh(mesh_path)
-    roty = get_rot_y( np.pi/2)
-    rotz = get_rot_z( np.pi/2)
+    roty = get_rot_y( -np.pi/2)
+    rotz = get_rot_z( -np.pi/2)
     t = np.dot( rotz, roty)
     mesh.apply_transform(t)
     return mesh
@@ -94,8 +94,27 @@ def export_matlab_meshes():
         run2D = mesh_to_voxelized_run2D(mesh, max_dim = 200)
         with open('car%d_t.pkl' % i, 'wb') as f:
             pickle.dump(run2D, f, -1)
+            
+def GPLVM_experiment(ndim=200, input_dim=2, in_folder='/Users/amirrahimi/src/3Dshapes/car_train_colored/transformed/', num=105):
+    Y = np.zeros((num, 200*200*2))
+    i = 0
+    for x in os.listdir(in_folder):
+        if x.endswith('pkl'):
+            with open(in_folder + x, 'rb') as f:
+                a = pickle.load(f)
+                Y[i,:] = a.ravel()
+                i = i + 1
+    y_mean = Y.mean(axis=0)
+    y_var  = Y.var(axis=0)
+    n0var_idx = y_var.nonzero()[0]
+    Y_norm = (Y[:, n0var_idx] - y_mean[n0var_idx])/(y_var[n0var_idx])
+    Q = input_dim
+    m_gplvm = GPy.models.GPLVM( Y_norm, Q, kernel=GPy.kern.RBF(Q) )
+    m_gplvm.optimize(messages=1, max_iters=5e4)
+    return m_gplvm
 
-def GPLVM_experiment(ndim=200, input_dim=2):
+
+def GPLVM_experiment_matlab(ndim=200, input_dim=2):
     Y = np.zeros((10, 200*200*2))
     for i in range(10):
         with open('car%d_t.pkl' % i, 'rb') as f:
