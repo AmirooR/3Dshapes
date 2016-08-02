@@ -1,5 +1,5 @@
 import numpy as np
-import trimesh
+from trimesh import load_mesh
 import cPickle as pickle
 import GPy
 import os
@@ -64,7 +64,7 @@ def mesh_to_voxelized_run2D( mesh, max_dim = 100, transformation = np.eye(4) ):
     return final_X
 
 def transform_converted_matlab_meshes(mesh_path):
-    mesh = trimesh.load_mesh(mesh_path)
+    mesh = load_mesh(mesh_path)
     roty = get_rot_y( -np.pi/2)
     rotz = get_rot_z( -np.pi/2)
     t = np.dot( rotz, roty)
@@ -80,7 +80,7 @@ def export_meshes_to_run2D_pkl(in_folder='/Users/amirrahimi/src/3Dshapes/car_tra
             skip = False
         if x.endswith('stl') and not skip:
             print x
-            mesh = trimesh.load_mesh(in_folder + x)
+            mesh = load_mesh(in_folder + x)
             run2D = mesh_to_voxelized_run2D(mesh, max_dim = 200)
             with open( in_folder + x[:-3] + 'pkl', 'wb') as f:
                 pickle.dump(run2D, f, -1)

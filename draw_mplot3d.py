@@ -11,12 +11,12 @@ if len(sys.argv) != 2:
 with open(sys.argv[1], 'rb') as f:
     model = pickle.load(f)
     r,c = np.nonzero( model[:,:,1])
-    xs = np.hstack((c,c))
-    ys = np.hstack((r,r)) # np.zeros((num_points,))
+    xs = np.hstack((r,r))
+    ys = np.hstack((c,c)) # np.zeros((num_points,))
     zs = np.zeros(len(ys))
     zs[:len(r)] = model[r,c,0]
     zs[-len(r):] = model[r,c,1]
-    
+    plt.imshow(model[:,:,1])
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     ax.scatter(xs, ys, zs, depthshade=True)
