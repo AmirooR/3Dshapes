@@ -15,18 +15,23 @@ import os.path as osp
 import scipy.io as spio
 from trimesh import load_mesh
 from collections import namedtuple
+#import skimage.io as skio
+import cv2
+
 
 SceneStruct = namedtuple("SceneStruct", "meshes")
 exemplar_annotation_root = '/Users/amirrahimi/src/intrinsics/amir/new_annotations/car_annotations/'
 cad_original_root = '/Users/amirrahimi/src/3Dshapes/pascal3d/'
 cad_transformed_root = '/Users/amirrahimi/src/3Dshapes/pascal3d/transformed/' 
-
+images_root = '/Users/amirrahimi/src/intrinsics/amir/VOCdevkit/VOC2007/car_images/'
 
 name = 'OpenGL viewer'
-height = 375
-width = 500
-viewport_size_x = width
-viewport_size_y = height
+
+### NOTE: read them by image!
+#height = 333
+#width = 500
+#viewport_size_x = width
+#viewport_size_y = height
 
 
 def get_rot_x(theta):
@@ -46,6 +51,7 @@ class GLRenderer():
 
         self.using_fixed_cam = False
         self.current_cam_index = 0
+        self.use_texture = False
         # for FPS calculation
         self.prev_time = 0
         self.prev_fps_time = 0
@@ -86,6 +92,56 @@ class GLRenderer():
         glBindBuffer(GL_ARRAY_BUFFER,0)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0)
 
+    def orthogonalStart(self):
+        glMatrixMode(GL_PROJECTION)
+        glPushMatrix()
+        glLoadIdentity()
+        gluOrtho2D(-width/2, width/2, -height/2, height/2)
+        glMatrixMode(GL_MODELVIEW)
+
+    def orthogonalEnd(self):
+        glMatrixMode(GL_PROJECTION)
+        glPopMatrix()
+        glMatrixMode(GL_MODELVIEW)
+
+    def background(self):
+        glBindTexture(GL_TEXTURE_2D, self.texture)
+        self.orthogonalStart()
+        iw = width
+        ih = height
+        glPushMatrix()
+        glTranslatef( -iw/2, -ih/2, 0 )
+        glBegin(GL_QUADS)
+        glTexCoord2i(0,0)
+        glVertex2i(0, 0)
+        glTexCoord2i(1,0) 
+        glVertex2i(iw, 0)
+        glTexCoord2i(1,1) 
+        glVertex2i(iw, ih)
+        glTexCoord2i(0,1) 
+        glVertex2i(0, ih)
+        glEnd()
+        glPopMatrix()
+        self.orthogonalEnd();
+
+    def load_texture(self, image_path):
+        #img = skio.imread(image_path)
+        img = cv2.imread(images_root + image_path + '.jpg')
+        img_r = np.flipud(cv2.resize(img, (width, height)))
+        texture = glGenTextures(1)
+        glBindTexture( GL_TEXTURE_2D, texture ); 
+        glPixelStorei( GL_UNPACK_ALIGNMENT, 1 );
+        glTexEnvf( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE ); 
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,GL_BGR, GL_UNSIGNED_BYTE, img_r.ravel()) # or img itself ?
+        return texture
+
+
     def load_model(self, path, postprocess = None):
         self.scene = SceneStruct( meshes = [] )
         record = spio.loadmat(exemplar_annotation_root + path + '.mat', struct_as_record=True)
@@ -102,37 +158,25 @@ class GLRenderer():
                     px = viewpoint['px'][0,0][0,0]
                     py = viewpoint['py'][0,0][0,0]
                     yaw = viewpoint['theta'][0,0][0,0]
-                    distance_ratio = 2 #distance # TODO
-                    field_of_view = 45
                     focal = 3000
                     cad_idx = car['cad_index'][0,0]-1
                     print 'loading mesh car%d_t.stl' % cad_idx
                     far = 100
-                    near = 0.01
+                    near = 0.001
                     self.near = near
                     self.far = far
                     r = viewport_size_x - px
                     l = -px
                     t = viewport_size_y - py
                     b = -py
-
-                    #self.perspMat = np.array([focal/px, 0, 0, 0, 0, focal/py, 0, 0, 2*(px/viewport_size_x)-1, 2*(py/viewport_size_y)-1,-(far+near)/(far-near),-1,0,0,-2*far*near/(far-near),0]) 
-
-                    # self.perspMat = np.array([2*focal/viewport_size_x, 0, 0, 0, 0, 2*focal/viewport_size_y, 0, 0, 2*(px/viewport_size_x)-1, 2*(py/viewport_size_y)-1,-(far+near)/(far-near),-1,0,0,-2*far*near/(far-near),0])
                     self.perspMat = np.array([focal, 0, 0, 0, 0, -focal, 0, 0, -px, -py, near+far, -1, 0, 0, near*far, 0])
-                    #self.perspMat = np.array([2*focal/viewport_size_x, 0, 0, 0, 0, 2*focal/viewport_size_y, 0, 0, (l+r)/(r-l), (b+t)/(t-b),-(far+near)/(far-near),-1,0,0,-2*far*near/(far-near),0])
-
-                    #self.perspMat = np.array([focal/px, 0, 0, 0, 0, focal/py, 0, 0, (l+r)/(r-l), (t+b)/(t-b), -(far+near)/(far-near), -1, 0, 0, -2*far*near/(far-near), 0]) #2*(px/viewport_size_x)-1, 2*(py/viewport_size_y)-1,-(far+near)/(far-near),-1,0,0,-2*far*near/(far-near),0]) 
-
-                    ## scene = pyassimp.load(cad_transformed_root + 'car%d_t.stl' % cad_idx)
-                    ## mesh = scene.meshes[0]
+                    ###self.perspMat = np.array([focal, 0, 0, 0, 0, -focal, 0, 0, -px, -height/2, near+far, -1, 0, 0, near*far, 0])
                     mesh = load_mesh(cad_transformed_root + 'car%d_t.stl' % cad_idx)
                     print 'Done'
                     e = elevation*np.pi/180
                     a = azimuth*np.pi/180
                     d = distance
                     
-
                     C = np.zeros((3,1))
                     C[0] = 0 # d*np.cos(e)*np.sin(a)
                     C[2] = -d # -d*np.cos(e)*np.cos(a)
@@ -149,8 +193,6 @@ class GLRenderer():
                     print self.bb_min
                     self.bb_max = mesh.bounds[1,:]
                     print self.bb_max
-                    ### self.bb_min, self.bb_max = get_bounding_box(self.scene)
-                    ### logger.info("  bounding box:" + str(self.bb_min) + " - " + str(self.bb_max))
 
                     self.scene_center = [(a + b) / 2. for a, b in zip(self.bb_min, self.bb_max)]
                     print self.scene_center
@@ -312,6 +354,14 @@ class GLRenderer():
         """ GLUT callback to redraw OpenGL surface
         """
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
+        if self.use_texture:
+            glDisable(GL_DEPTH_TEST)
+            glLoadIdentity()
+            glEnable(GL_TEXTURE_2D)
+            self.background()
+            glDisable(GL_TEXTURE_2D)
+            glEnable(GL_DEPTH_TEST)
+            glDepthMask(GL_TRUE)
 
         #glRotatef(self.angle,0.,1.,0.)
         self.recursive_render(self.scene)
@@ -336,7 +386,7 @@ class GLRenderer():
             with open('depths.Z','wb') as f:
                 depths.tofile(f)
 
-    def render(self, filename=None, fullscreen = False, autofit = False, postprocess = None):
+    def render(self, filename=None, fullscreen = False, autofit = False, postprocess = None, use_texture = False):
         """
 
         :param autofit: if true, scale the scene to fit the whole geometry
@@ -357,7 +407,11 @@ class GLRenderer():
                 print("Fullscreen mode not available!")
                 sys.exit(1)
 
+        self.use_texture = use_texture
+
         self.load_model(filename, postprocess = postprocess)
+        if self.use_texture:
+            self.texture = self.load_texture(filename) 
 
 
         glClearColor(0.1,0.1,0.1,1.)
@@ -399,7 +453,11 @@ if __name__ == '__main__':
     if not len(sys.argv) > 1:
         print("Usage: " + __file__ + " <model>")
         sys.exit(0)
-
+    img = cv2.imread(images_root + sys.argv[1] + '.jpg')
+    width = img.shape[1]
+    height = img.shape[0]
+    viewport_size_x = width
+    viewport_size_y = height
     glrender = GLRenderer()
-    glrender.render(sys.argv[1], fullscreen = False, postprocess = None)
+    glrender.render(sys.argv[1], fullscreen = False, postprocess = None, use_texture = True)
 
