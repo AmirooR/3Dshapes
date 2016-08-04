@@ -70,7 +70,7 @@ class GLRenderer():
         glBindBuffer(GL_ARRAY_BUFFER, mesh.gl["vertices"])
         glBufferData(GL_ARRAY_BUFFER, 
                     vertices,
-                    GL_STATIC_DRAW)
+                    GL_DYNAMIC_DRAW)
         normals = np.asarray( mesh.vertex_normals.copy(), dtype=np.float32)
 
         # Fill the buffer for normals
@@ -78,7 +78,7 @@ class GLRenderer():
         glBindBuffer(GL_ARRAY_BUFFER, mesh.gl["normals"])
         glBufferData(GL_ARRAY_BUFFER, 
                     normals,
-                    GL_STATIC_DRAW)
+                    GL_DYNAMIC_DRAW)
 
         faces = np.asarray( mesh.faces.copy(), dtype=np.int32)
         # Fill the buffer for vertex positions
@@ -376,7 +376,7 @@ class GLRenderer():
     def onkeypress(self, key, x, y):
         if key == 'q':
             sys.exit(0)
-        if key == 's':
+        elif key == 's':
             print 'reading depths'
             buffer_ = (GLfloat * (viewport_size_y*viewport_size_x) )(0.0)
             glReadPixels(0, 0, viewport_size_x, viewport_size_y, GL_DEPTH_COMPONENT, GL_FLOAT, buffer_)
@@ -385,6 +385,19 @@ class GLRenderer():
             depths = np.asarray(buffer_, dtype=np.float64)
             with open('depths.Z','wb') as f:
                 depths.tofile(f)
+        elif key == 'r':
+            print 'going right'
+            mesh = self.scene.meshes[-1]
+            vertices = np.asarray( mesh.vertices.copy(), dtype=np.float32)
+            vertices[:,0] = vertices[:,0] + 0.01
+            mesh.vertices[:,0] += 0.01
+            glBindBuffer(GL_ARRAY_BUFFER, mesh.gl["vertices"])
+            #glBufferData(GL_ARRAY_BUFFER, 
+            #        vertices,
+            #        GL_DYNAMIC_DRAW)
+            glBufferSubData(target=GL_ARRAY_BUFFER, offset=0, size=None, data=vertices)
+            #glBindBuffer(GL_ARRAY_BUFFER,0)
+
 
     def render(self, filename=None, fullscreen = False, autofit = False, postprocess = None, use_texture = False):
         """
