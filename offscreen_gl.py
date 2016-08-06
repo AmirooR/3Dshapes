@@ -16,9 +16,7 @@ import os.path as osp
 import scipy.io as spio
 from trimesh import load_mesh
 from collections import namedtuple
-#import skimage.io as skio
 import cv2
-
 
 SceneStruct = namedtuple("SceneStruct", "meshes")
 exemplar_annotation_root = '/Users/amirrahimi/src/intrinsics/amir/new_annotations/car_annotations/'
@@ -85,8 +83,8 @@ class Offscreen():
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL)
             glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, maxWidth, maxHeight, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, None)
 
-            self.fb = glGenFramebuffersEXT(1)
-            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, self.fb)
+            self.fb2 = glGenFramebuffersEXT(1)
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, self.fb2)
             glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, self.renderTex, 0)
             glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, self.depthTex, 0)
             #glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT|GL_DEPTH_ATTACHMENT_EXT)
@@ -265,6 +263,13 @@ class Offscreen():
         patches = {'depths':depths, 'pixels':pixels}
         return patches
 
+    def delete_mems(self):
+        # clearing buffers
+        glDeleteTextures(self.renderTex)
+        glDeleteTextures(self.depthTex)
+        glDeleteFramebuffersEXT(np.asarray([self.fb, self.fb2]))
+        #glDeleteFramebuffersEXT(self.fb2)
+
 
 if __name__ == '__main__':
     if not len(sys.argv) > 1:
@@ -273,12 +278,14 @@ if __name__ == '__main__':
     img = cv2.imread(images_root + sys.argv[1] + '.jpg')
     width = img.shape[1]
     height = img.shape[0]
-    offscreen = Offscreen(width, height)
-    for i in range(1):
+    
+    for i in range(2):
+        offscreen = Offscreen(width, height)
         offscreen.load_model(sys.argv[1], i)
         offscreen.camera_setup()
         offscreen.display()
         patches = offscreen.drawPatchToDepthBuffer()
+        offscreen.delete_mems()
         with open('patches_depths_%d.Z' % i,'wb') as f:
             patches['depths'].tofile(f)
         with open('patches_pixels_%d.RGB' % i, 'wb') as f:

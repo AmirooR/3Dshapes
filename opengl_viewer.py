@@ -279,9 +279,9 @@ class GLRenderer():
         """
 
         if not hasattr(mat, "gl_mat"): # evaluate once the mat properties, and cache the values in a glDisplayList.
-            diffuse = numpy.array( [0.8, 0.8, 0.8, 1.0])
-            specular = numpy.array([0., 0., 0., 1.0])
-            ambient = numpy.array([0.2, 0.2, 0.2, 1.0])
+            diffuse = numpy.array( [0.8, 0.8, 0.8, .5])
+            specular = numpy.array([0., 0., 0., 0.5])
+            ambient = numpy.array([0.2, 0.2, 0.2, 0.5])
             emissive = numpy.array([0., 0., 0., 1.0])
             shininess =  128
             wireframe = 0
@@ -397,6 +397,32 @@ class GLRenderer():
             #        GL_DYNAMIC_DRAW)
             glBufferSubData(target=GL_ARRAY_BUFFER, offset=0, size=None, data=vertices)
             #glBindBuffer(GL_ARRAY_BUFFER,0)
+        elif key == 'm':
+            modelviewmatrix=glGetDoublev(GL_MODELVIEW_MATRIX)
+
+            print 'ModelViewMatrix'
+            print modelviewmatrix
+
+            projectionmatrix=glGetDoublev(GL_PROJECTION_MATRIX)
+            print 'ProjectionMatrix'
+            print projectionmatrix
+
+            viewport=glGetIntegerv(GL_VIEWPORT)
+
+            print 'Viewport'
+            print viewport
+            x = 400
+            y = 100
+            print float(x), viewport[3]-float(y)
+
+            wx,wy,wz= gluUnProject(float(x),viewport[3]-float(y),0.,
+                                              modelviewmatrix,
+                                              projectionmatrix,
+                                              viewport)
+
+            print 'World Coordinate'
+            print wx,wy,wz
+
 
 
     def render(self, filename=None, fullscreen = False, autofit = False, postprocess = None, use_texture = False):
