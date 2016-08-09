@@ -16,13 +16,19 @@ import os.path as osp
 import scipy.io as spio
 from trimesh import load_mesh
 from collections import namedtuple
+import cPickle as pickle
 import cv2
+import time
 
 SceneStruct = namedtuple("SceneStruct", "meshes")
 exemplar_annotation_root = '/Users/amirrahimi/src/intrinsics/amir/new_annotations/car_annotations/'
 cad_original_root = '/Users/amirrahimi/src/3Dshapes/pascal3d/'
 cad_transformed_root = '/Users/amirrahimi/src/3Dshapes/pascal3d/transformed/' 
 images_root = '/Users/amirrahimi/src/intrinsics/amir/VOCdevkit/VOC2007/car_images/'
+
+
+#points[y,x,0], points[y,x,1], points[y,x,2] = gluUnProject( float(x), self.height - float(y), depth_map[y,x])
+
 
 name = 'OpenGL viewer'
 def get_rot_x(theta):
@@ -162,6 +168,7 @@ class Offscreen():
                     self.perspMat = np.array([focal, 0, 0, 0, 0, -focal, 0, 0, -px, -py, near+far, -1, 0, 0, near*far, 0])
                     mesh = load_mesh(cad_transformed_root + 'car%d_t.stl' % cad_idx)
                     apply_transformations( mesh, self.azimuth, self.elevation, self.yaw, self.distance)
+                    mesh.export(file_obj='transformed.stl')
 
                     self.meshes.append(mesh)
 
@@ -268,7 +275,53 @@ class Offscreen():
         glDeleteTextures(self.renderTex)
         glDeleteTextures(self.depthTex)
         glDeleteFramebuffersEXT(np.asarray([self.fb, self.fb2]))
-        #glDeleteFramebuffersEXT(self.fb2)
+        
+        
+    def vectorized_unproject2(self, depths):
+        tic = time.time()
+        depth_map = depths.reshape((self.height, -1))
+        idx = np.where(depth_map == 1.0)
+        vunproject = np.vectorize(gluUnProject)
+        results = vunproject(np.float32(idx[1]), self.height - np.float32(idx[0]), depth_map[idx])
+        print ' %s seconds ' % (time.time() - tic)
+        return results
+
+    def unproject_matrix(self, depths):
+        tic = time.time()
+        depth_map = depths.reshape((self.height, -1))
+        idx = np.where( depth_map == 1.0)
+        projectionmatrix=glGetDoublev(GL_PROJECTION_MATRIX)
+        unproject_mat = np.linalg.inv( projectionmatrix.T)
+        xs = 2*np.float64(idx[1])/self.width - 1
+        ys = 1 - 2*np.float64(idx[0])/self.height
+        zs = 2 * depth_map[idx] - 1
+        points2D = np.vstack((xs, ys, zs, np.ones_like(xs)))
+        points = np.dot( unproject_mat, points2D)
+        points /= points[3,:]
+        print '%s seconds ' % (time.time() - tic)
+        return points
+
+    def vectorized_unproject(self, depths):
+        tic = time.time()
+        depth_map = depths.reshape((self.height, -1))
+        indices = np.indices((self.height, self.width))
+        vunproject = np.vectorize(gluUnProject)
+        results = vunproject(np.float32(indices[1,:,:].ravel()), self.height - np.float32(indices[0,:,:,].ravel()), depth_map[:,:].ravel())
+        print ' %s seconds ' % (time.time() - tic)
+        return results
+
+    def unproject(self, depths):
+        tic = time.time()
+        depth_map = depths.reshape((self.height, -1))
+        points = np.zeros(depth_map.shape + (3,))
+        points[:] = np.NAN
+        for y in np.arange(self.height):
+            for x in np.arange(self.width):
+                if depth_map[y,x] != 1: # mask
+                    points[y,x,0], points[y,x,1], points[y,x,2] = gluUnProject( float(x), self.height - float(y), depth_map[y,x])
+        print ' %s seconds ' % (time.time() - tic)
+        return points
+
 
 
 if __name__ == '__main__':
@@ -279,14 +332,17 @@ if __name__ == '__main__':
     width = img.shape[1]
     height = img.shape[0]
     
-    for i in range(2):
+    for i in range(1):
         offscreen = Offscreen(width, height)
         offscreen.load_model(sys.argv[1], i)
         offscreen.camera_setup()
         offscreen.display()
         patches = offscreen.drawPatchToDepthBuffer()
+        points = offscreen.unproject_matrix(patches['depths'])
         offscreen.delete_mems()
         with open('patches_depths_%d.Z' % i,'wb') as f:
             patches['depths'].tofile(f)
         with open('patches_pixels_%d.RGB' % i, 'wb') as f:
             patches['pixels'].tofile(f)
+        with open('points_%d.XYZ.pkl' % i, 'wb') as f:
+            pickle.dump(points, f)

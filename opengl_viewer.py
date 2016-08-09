@@ -17,7 +17,7 @@ from trimesh import load_mesh
 from collections import namedtuple
 #import skimage.io as skio
 import cv2
-
+import time
 
 SceneStruct = namedtuple("SceneStruct", "meshes")
 exemplar_annotation_root = '/Users/amirrahimi/src/intrinsics/amir/new_annotations/car_annotations/'
@@ -415,15 +415,20 @@ class GLRenderer():
             y = 100
             print float(x), viewport[3]-float(y)
 
-            wx,wy,wz= gluUnProject(float(x),viewport[3]-float(y),0.,
+            unproject_mat = np.linalg.inv( projectionmatrix.T) # NOTE: modelview is identity here, opengl is row order
+            new_p_ndc = np.array([ 2*float(x)/viewport_size_x - 1,  1 - 2*float(y)/viewport_size_y, 1., 1.]) # 2*z -1
+            new_p_world = np.dot( unproject_mat, new_p_ndc)
+            print 'new_p_world'
+            print new_p_world/new_p_world[3]
+
+            wx,wy,wz= gluUnProject(float(x),viewport[3]-float(y),1.,
                                               modelviewmatrix,
                                               projectionmatrix,
                                               viewport)
 
             print 'World Coordinate'
             print wx,wy,wz
-
-
+            
 
     def render(self, filename=None, fullscreen = False, autofit = False, postprocess = None, use_texture = False):
         """
